@@ -1,7 +1,5 @@
-# Radiation Leak Detection Dashboard
-# Optional dependency: plotly (falls back to Streamlit's native chart if missing).
-
-import math
+```python
+import html
 from pathlib import Path
 
 import joblib
@@ -22,9 +20,8 @@ MODEL_FILENAME = "radiation_ml_model.pkl"
 LABELS = {0: "NORMAL", 1: "ELEVATED"}
 
 COLOR_NORMAL = "#22c55e"
-COLOR_ELEVATED = "#f97316"
-COLOR_NEUTRAL = "#64748b"
-COLOR_ACCENT = "#22d3ee"
+COLOR_ELEVATED = "#ef4444"
+COLOR_NEUTRAL = "#71717a"
 
 st.set_page_config(
     page_title="Radiation Monitoring Dashboard",
@@ -38,197 +35,113 @@ st.set_page_config(
 # ----------------------------------------------------------------------------
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 html, body, .stApp {
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
-.stApp {
-    background: radial-gradient(1200px 600px at 10% -10%, #11213f 0%, rgba(11,17,32,0) 60%), #0b1120;
-    color: #e6edf7;
-}
+.stApp { background: #09090b; color: #fafafa; }
 header[data-testid="stHeader"] { background: transparent; }
 #MainMenu, footer { visibility: hidden; }
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-    max-width: 1280px;
-}
-.stApp p, .stApp label, .stApp span, .stApp li { color: inherit; }
+.block-container { padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1200px; }
 
-/* Header */
-.app-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.25rem;
-    flex-wrap: wrap;
-    padding: 1.4rem 1.6rem;
-    border: 1px solid #1f2d4a;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #111b33 0%, #0f1a2e 100%);
-    box-shadow: 0 8px 28px rgba(0,0,0,0.35);
-    margin-bottom: 1.6rem;
+/* Top bar */
+.topbar {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.5rem;
+    padding-bottom: 1.2rem; margin-bottom: 0.5rem;
+    border-bottom: 1px solid #27272a;
 }
-.app-header-left { display: flex; align-items: center; gap: 1.1rem; min-width: 260px; }
-.app-logo {
-    width: 58px; height: 58px; flex: 0 0 58px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 14px;
-    background: rgba(34,211,238,0.08);
-    border: 1px solid rgba(34,211,238,0.35);
-}
-.app-title { font-size: 1.45rem; font-weight: 700; line-height: 1.25; color: #f1f5fb; margin: 0; }
-.app-subtitle { font-size: 0.9rem; color: #8ea3c4; margin-top: 0.25rem; letter-spacing: 0.02em; }
-.status-chip {
-    display: inline-flex; align-items: center; gap: 0.55rem;
-    padding: 0.5rem 0.95rem;
-    border-radius: 999px;
-    border: 1px solid #2a3b5f;
-    background: #0e1730;
-    font-size: 0.74rem; font-weight: 600; letter-spacing: 0.1em; color: #a9bbd8;
-}
-.status-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: #22d3ee; }
+.topbar h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; margin: 0; padding: 0; color: #fafafa; }
+.topbar p { font-size: 0.9rem; color: #a1a1aa; margin: 0.3rem 0 0 0; }
+.topbar .meta { font-size: 0.8rem; color: #71717a; }
 
 /* Section headings */
-.section-head { margin: 2rem 0 0.9rem 0; }
-.section-head .eyebrow {
-    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.14em;
-    color: #22d3ee; text-transform: uppercase;
-}
-.section-head h3 { margin: 0.15rem 0 0 0; padding: 0; font-size: 1.2rem; font-weight: 650; color: #f1f5fb; }
-.section-head .desc { font-size: 0.85rem; color: #8ea3c4; margin-top: 0.2rem; }
+.sec { margin: 2.2rem 0 0.9rem 0; }
+.sec h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; padding: 0; color: #fafafa; }
+.sec p { font-size: 0.85rem; color: #a1a1aa; margin: 0.2rem 0 0 0; }
 
-/* Bordered containers */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    border-radius: 16px;
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div[data-testid="stVerticalBlock"] .panel-marker) {
-    border: 1px solid #1f2d4a;
-    background: #111b33;
-}
+/* Containers */
+div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 10px; }
 
-/* Metric cards */
-.metric-card {
-    position: relative;
-    height: 100%;
-    padding: 1.25rem 1.35rem 1.2rem 1.35rem;
-    border-radius: 16px;
-    border: 1px solid #1f2d4a;
-    background: #111b33;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.28);
-    overflow: hidden;
-}
-.metric-card::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
-    background: var(--accent, #64748b);
-}
-.metric-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #8ea3c4; }
-.metric-value { font-size: 2.2rem; font-weight: 750; line-height: 1.15; margin-top: 0.55rem; color: var(--accent-text, #f1f5fb); }
-.metric-sub { font-size: 0.84rem; color: #8ea3c4; margin-top: 0.35rem; }
+.card-title { font-size: 0.95rem; font-weight: 600; color: #fafafa; margin: 0; }
+.card-desc { font-size: 0.82rem; color: #a1a1aa; margin: 0.15rem 0 0.6rem 0; }
 
-/* Alert panel */
-.alert-panel {
-    padding: 1.2rem 1.3rem;
-    border-radius: 14px;
-    border: 1px solid var(--accent, #64748b);
-    background: var(--accent-bg, rgba(100,116,139,0.10));
+/* Stat cards */
+.stat {
+    border: 1px solid #27272a; border-radius: 10px; background: #0c0c0f;
+    padding: 1.1rem 1.2rem; height: 100%;
 }
-.alert-badge {
-    display: inline-flex; align-items: center; gap: 0.5rem;
-    padding: 0.3rem 0.8rem; border-radius: 999px;
-    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em;
-    color: var(--accent, #64748b);
-    border: 1px solid var(--accent, #64748b);
-    background: rgba(0,0,0,0.18);
+.stat .k { font-size: 0.8rem; color: #a1a1aa; }
+.stat .v { font-size: 1.9rem; font-weight: 600; letter-spacing: -0.02em; margin-top: 0.35rem; line-height: 1.2; }
+.stat .s { font-size: 0.8rem; color: #71717a; margin-top: 0.25rem; }
+
+/* Status block */
+.status {
+    border: 1px solid #27272a; border-radius: 10px; padding: 1rem 1.1rem;
+    background: #0c0c0f;
 }
-.alert-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #64748b); }
-.alert-title { font-size: 1.05rem; font-weight: 650; color: #f1f5fb; margin-top: 0.85rem; }
-.alert-message { font-size: 0.9rem; color: #b3c3de; margin-top: 0.25rem; }
-.alert-meta { font-size: 0.78rem; color: #7f93b5; margin-top: 0.8rem; }
+.badge {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em;
+    padding: 0.2rem 0.65rem; border-radius: 6px;
+    border: 1px solid var(--c); color: var(--c);
+}
+.badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); display: inline-block; }
+.status .msg { font-size: 1rem; font-weight: 500; margin-top: 0.8rem; color: #fafafa; }
+.status .sub { font-size: 0.82rem; color: #a1a1aa; margin-top: 0.2rem; }
 
-/* Panel helper text */
-.helper-text { font-size: 0.85rem; color: #8ea3c4; margin: 0.1rem 0 0.4rem 0; }
-.panel-title { font-size: 1rem; font-weight: 650; color: #f1f5fb; margin: 0 0 0.15rem 0; }
-
-/* Slider label */
-div[data-testid="stSlider"] label p { color: #d5e0f2 !important; font-weight: 600; }
+/* Slider thumb */
+div[data-testid="stSlider"] [role="slider"] { background-color: #fafafa; border-color: #fafafa; }
+div[data-testid="stSlider"] label p { color: #e4e4e7; font-weight: 500; }
 
 /* Buttons */
 .stButton > button, .stDownloadButton > button {
-    border-radius: 12px;
-    border: 1px solid #2a3b5f;
-    background: #14213f;
-    color: #e6edf7;
-    font-weight: 600;
-    padding: 0.6rem 1.2rem;
-    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+    border-radius: 8px; border: 1px solid #27272a; background: #18181b;
+    color: #fafafa; font-weight: 500; padding: 0.5rem 1.1rem;
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 .stButton > button:hover, .stDownloadButton > button:hover {
-    border-color: #22d3ee;
-    background: #19294d;
-    color: #ffffff;
+    background: #27272a; border-color: #3f3f46; color: #fafafa;
 }
 .stButton > button:focus-visible, .stDownloadButton > button:focus-visible {
-    outline: none;
-    border-color: #22d3ee;
-    box-shadow: 0 0 0 3px rgba(34,211,238,0.35);
+    outline: none; box-shadow: 0 0 0 2px #09090b, 0 0 0 4px #71717a;
 }
-.stButton > button:active, .stDownloadButton > button:active { transform: translateY(1px); }
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #0891b2 0%, #2563eb 100%);
-    border: 1px solid #38bdf8;
-    color: #ffffff;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+.stButton > button[kind="primary"] { background: #fafafa; border-color: #fafafa; color: #09090b; font-weight: 600; }
+.stButton > button[kind="primary"]:hover { background: #e4e4e7; border-color: #e4e4e7; color: #09090b; }
+.stButton > button:disabled, .stDownloadButton > button:disabled { opacity: 0.4; }
+
+/* Tables */
+.tbl-wrap { border: 1px solid #27272a; border-radius: 10px; overflow: auto; max-height: 380px; background: #0c0c0f; }
+table.tbl { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+table.tbl th {
+    text-align: left; font-weight: 500; font-size: 0.78rem; color: #a1a1aa;
+    padding: 0.7rem 1rem; border-bottom: 1px solid #27272a;
+    position: sticky; top: 0; background: #0c0c0f;
 }
-.stButton > button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #0ea5c6 0%, #3b74f0 100%);
-    border-color: #7dd3fc;
-    box-shadow: 0 6px 18px rgba(34,211,238,0.25);
-}
-.stDownloadButton > button:disabled, .stButton > button:disabled { opacity: 0.45; }
+table.tbl td { padding: 0.65rem 1rem; border-bottom: 1px solid #1c1c1f; color: #e4e4e7; }
+table.tbl tr:last-child td { border-bottom: none; }
+table.tbl tr.active td { background: #141417; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 0.5rem; }
 
 /* Empty state */
-.empty-state {
-    padding: 2rem 1.2rem;
-    text-align: center;
-    border: 1px dashed #2a3b5f;
-    border-radius: 14px;
-    background: rgba(17,27,51,0.6);
-    color: #8ea3c4;
-    font-size: 0.92rem;
+.empty {
+    border: 1px dashed #27272a; border-radius: 10px; padding: 2rem 1rem;
+    text-align: center; color: #a1a1aa; font-size: 0.88rem;
 }
-.empty-state strong { color: #d5e0f2; display: block; margin-bottom: 0.3rem; font-size: 1rem; }
+.empty b { display: block; color: #e4e4e7; font-weight: 500; margin-bottom: 0.2rem; }
 
-/* System information */
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 0.75rem;
-}
-.info-item {
-    padding: 0.8rem 1rem;
-    border: 1px solid #1f2d4a;
-    border-radius: 12px;
-    background: #0f1830;
-}
-.info-key { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #7f93b5; }
-.info-val { font-size: 0.92rem; color: #e6edf7; margin-top: 0.2rem; word-break: break-word; }
-.info-note {
-    margin-top: 0.9rem;
-    font-size: 0.82rem;
-    color: #8ea3c4;
-    padding: 0.8rem 1rem;
-    border-left: 3px solid #2a3b5f;
-    background: rgba(15,24,48,0.7);
-    border-radius: 0 10px 10px 0;
-}
+/* Hardware + info grids */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.75rem; }
+.item { border: 1px solid #27272a; border-radius: 10px; background: #0c0c0f; padding: 1rem 1.1rem; }
+.item .n { font-size: 0.92rem; font-weight: 600; color: #fafafa; }
+.item .r { font-size: 0.82rem; color: #a1a1aa; margin-top: 0.25rem; line-height: 1.45; }
+.kv .k { font-size: 0.76rem; color: #71717a; }
+.kv .v { font-size: 0.9rem; color: #e4e4e7; margin-top: 0.15rem; word-break: break-word; }
 
 @media (max-width: 768px) {
-    .app-title { font-size: 1.15rem; }
-    .metric-value { font-size: 1.8rem; }
-    .app-header { padding: 1.1rem; }
+    .topbar h1 { font-size: 1.2rem; }
+    .stat .v { font-size: 1.6rem; }
 }
 </style>
 """
@@ -238,67 +151,29 @@ st.markdown(CSS, unsafe_allow_html=True)
 # ----------------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------------
-def trefoil_svg() -> str:
-    """Return an inline SVG of a radiation trefoil symbol."""
-    cx, cy, r_in, r_out = 24, 24, 6.5, 19
-
-    def pt(radius: float, angle_deg: float):
-        a = math.radians(angle_deg)
-        return cx + radius * math.cos(a), cy + radius * math.sin(a)
-
-    paths = []
-    for center in (-90, 30, 150):
-        a1, a2 = center - 30, center + 30
-        x1, y1 = pt(r_in, a1)
-        x2, y2 = pt(r_out, a1)
-        x3, y3 = pt(r_out, a2)
-        x4, y4 = pt(r_in, a2)
-        paths.append(
-            f"M{x1:.2f},{y1:.2f} L{x2:.2f},{y2:.2f} "
-            f"A{r_out},{r_out} 0 0 1 {x3:.2f},{y3:.2f} "
-            f"L{x4:.2f},{y4:.2f} A{r_in},{r_in} 0 0 0 {x1:.2f},{y1:.2f} Z"
-        )
-    body = "".join(f'<path d="{d}" fill="#22d3ee" fill-opacity="0.9"/>' for d in paths)
-    return (
-        '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">'
-        f'{body}<circle cx="{cx}" cy="{cy}" r="3.4" fill="#22d3ee"/></svg>'
-    )
+def esc(value) -> str:
+    return html.escape(str(value))
 
 
-def section_header(eyebrow: str, title: str, description: str = "") -> None:
-    desc_html = f'<div class="desc">{description}</div>' if description else ""
-    st.markdown(
-        f'<div class="section-head"><div class="eyebrow">{eyebrow}</div>'
-        f"<h3>{title}</h3>{desc_html}</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def metric_card(label: str, value: str, sub: str, accent: str, accent_text: str = "#f1f5fb") -> str:
-    return (
-        f'<div class="metric-card" style="--accent:{accent};--accent-text:{accent_text};">'
-        f'<div class="metric-label">{label}</div>'
-        f'<div class="metric-value">{value}</div>'
-        f'<div class="metric-sub">{sub}</div></div>'
-    )
+def section(title: str, description: str = "") -> None:
+    desc = f"<p>{esc(description)}</p>" if description else ""
+    st.markdown(f'<div class="sec"><h2>{esc(title)}</h2>{desc}</div>', unsafe_allow_html=True)
 
 
 def status_color(label: str) -> str:
-    if label == "NORMAL":
-        return COLOR_NORMAL
-    if label == "ELEVATED":
-        return COLOR_ELEVATED
-    return COLOR_NEUTRAL
+    return {"NORMAL": COLOR_NORMAL, "ELEVATED": COLOR_ELEVATED}.get(label, COLOR_NEUTRAL)
 
 
-def hex_to_rgba(hex_color: str, alpha: float) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
+def stat_card(label: str, value: str, sub: str, color: str = "#fafafa") -> str:
+    return (
+        f'<div class="stat"><div class="k">{esc(label)}</div>'
+        f'<div class="v" style="color:{color}">{esc(value)}</div>'
+        f'<div class="s">{esc(sub)}</div></div>'
+    )
 
 
 def stretch_call(func, *args, **kwargs):
-    """Call a Streamlit element with full-width sizing across Streamlit versions."""
+    """Full-width sizing that works across Streamlit versions."""
     try:
         return func(*args, width="stretch", **kwargs)
     except Exception:
@@ -340,7 +215,7 @@ if "analysis_error" not in st.session_state:
 
 
 def analyze_reading() -> None:
-    """Run one model prediction for the currently selected reading."""
+    """Run one model prediction for the selected reading and store it."""
     reading_value = int(st.session_state.get("reading_input", 20))
     sample = pd.DataFrame({"reading": [reading_value]})
     try:
@@ -374,45 +249,33 @@ def clear_history() -> None:
 
 history = st.session_state.history
 latest = history[-1] if history else None
-history_df = (
-    pd.DataFrame(history)
-    if history
-    else pd.DataFrame(columns=["Sample", "Reading", "AI Classification", "Model Confidence (%)"])
-)
+COLUMNS = ["Sample", "Reading", "AI Classification", "Model Confidence (%)"]
+history_df = pd.DataFrame(history, columns=COLUMNS) if history else pd.DataFrame(columns=COLUMNS)
 
 # ----------------------------------------------------------------------------
 # Header
 # ----------------------------------------------------------------------------
 st.markdown(
-    '<div class="app-header">'
-    '<div class="app-header-left">'
-    f'<div class="app-logo">{trefoil_svg()}</div>'
-    "<div>"
-    f'<div class="app-title">{PROJECT_TITLE}</div>'
-    f'<div class="app-subtitle">{PROJECT_SUBTITLE}</div>'
-    "</div></div>"
-    '<div class="status-chip"><span class="dot"></span>MONITORING INTERFACE</div>'
-    "</div>",
+    '<div class="topbar"><div>'
+    f"<h1>{esc(PROJECT_TITLE)}</h1>"
+    f"<p>{esc(PROJECT_SUBTITLE)}</p>"
+    "</div>"
+    '<div class="meta">ESP32 • LED • Buzzer • OLED Display</div></div>',
     unsafe_allow_html=True,
 )
 
 # ----------------------------------------------------------------------------
-# Current reading + alert management
+# Reading input + system status
 # ----------------------------------------------------------------------------
-section_header(
-    "Overview",
-    "Monitoring Dashboard",
-    "Select a reading, analyze it with the classification model, and review the resulting status.",
-)
+section("Monitoring Dashboard", "Select a reading and analyze it with the classification model.")
 
 left_col, right_col = st.columns([3, 2], gap="large")
 
 with left_col:
     with st.container(border=True):
-        st.markdown('<span class="panel-marker"></span>', unsafe_allow_html=True)
-        st.markdown('<div class="panel-title">Current Reading</div>', unsafe_allow_html=True)
+        st.markdown('<p class="card-title">Current Reading</p>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="helper-text">This value is the input used by the model for classification.</div>',
+            '<p class="card-desc">This value is the input used by the model for classification.</p>',
             unsafe_allow_html=True,
         )
         st.slider(
@@ -423,95 +286,63 @@ with left_col:
             step=1,
             key="reading_input",
         )
-        btn_col, clear_col, _ = st.columns([2, 2, 3])
-        with btn_col:
-            st.button(
-                "Analyze Reading",
-                type="primary",
-                on_click=analyze_reading,
-                key="analyze_button",
-            )
-        with clear_col:
-            st.button(
-                "Clear History",
-                on_click=clear_history,
-                disabled=not history,
-                key="clear_button",
-            )
+        b1, b2, _ = st.columns([2, 2, 3])
+        with b1:
+            st.button("Analyze Reading", type="primary", on_click=analyze_reading, key="analyze_button")
+        with b2:
+            st.button("Clear History", on_click=clear_history, disabled=not history, key="clear_button")
         if st.session_state.analysis_error:
             st.error(f"Analysis could not be completed: {st.session_state.analysis_error}")
 
 with right_col:
     with st.container(border=True):
-        st.markdown('<span class="panel-marker"></span>', unsafe_allow_html=True)
-        st.markdown('<div class="panel-title">Alert Management</div>', unsafe_allow_html=True)
+        st.markdown('<p class="card-title">System Status</p>', unsafe_allow_html=True)
         if latest is None:
-            accent = COLOR_NEUTRAL
-            badge = "AWAITING ANALYSIS"
-            title = "System Status"
-            message = "No reading has been analyzed yet."
-            meta = "Use Analyze Reading to generate a classification."
+            color, badge = COLOR_NEUTRAL, "AWAITING ANALYSIS"
+            msg, sub = "No reading analyzed yet.", "Use Analyze Reading to generate a classification."
         else:
             label = latest["AI Classification"]
-            accent = status_color(label)
-            badge = label
-            title = "System Status"
-            message = "No alert triggered." if label == "NORMAL" else "Elevated reading classification."
-            meta = (
-                f'Sample #{latest["Sample"]} • Reading {latest["Reading"]} AU • '
-                "Status derived from the model classification."
-            )
+            color, badge = status_color(label), label
+            msg = "No alert triggered." if label == "NORMAL" else "Elevated reading classification."
+            sub = f'Sample #{latest["Sample"]} • Reading {latest["Reading"]} AU'
         st.markdown(
-            f'<div class="alert-panel" style="--accent:{accent};--accent-bg:{hex_to_rgba(accent, 0.10)};">'
-            f'<span class="alert-badge"><span class="dot"></span>{badge}</span>'
-            f'<div class="alert-title">{title}</div>'
-            f'<div class="alert-message">{message}</div>'
-            f'<div class="alert-meta">{meta}</div>'
-            "</div>",
+            f'<div class="status" style="margin-top:0.6rem"><span class="badge" style="--c:{color}">'
+            f"<i></i>{esc(badge)}</span>"
+            f'<div class="msg">{esc(msg)}</div><div class="sub">{esc(sub)}</div></div>',
             unsafe_allow_html=True,
         )
 
 # ----------------------------------------------------------------------------
-# AI analysis cards
+# Summary cards
 # ----------------------------------------------------------------------------
-section_header("AI Analysis", "Classification Summary")
-
+st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 c1, c2, c3 = st.columns(3, gap="medium")
 
 if latest is None:
-    card_reading = metric_card("Current Reading", "—", "Awaiting analysis", COLOR_NEUTRAL, "#8ea3c4")
-    card_class = metric_card("AI Classification", "—", "No classification available yet", COLOR_NEUTRAL, "#8ea3c4")
-    card_conf = metric_card("Model Confidence", "—", "Predicted-class probability", COLOR_NEUTRAL, "#8ea3c4")
+    c1.markdown(stat_card("Current Reading", "—", "Awaiting analysis", "#52525b"), unsafe_allow_html=True)
+    c2.markdown(stat_card("AI Classification", "—", "No classification yet", "#52525b"), unsafe_allow_html=True)
+    c3.markdown(stat_card("Model Confidence", "—", "Predicted-class probability", "#52525b"), unsafe_allow_html=True)
 else:
     label = latest["AI Classification"]
-    accent = status_color(label)
-    card_reading = metric_card(
-        "Current Reading",
-        f'{latest["Reading"]}',
-        "Arbitrary Units",
-        COLOR_ACCENT,
+    c1.markdown(stat_card("Current Reading", str(latest["Reading"]), "Arbitrary Units"), unsafe_allow_html=True)
+    c2.markdown(
+        stat_card(
+            "AI Classification",
+            label,
+            "No alert triggered." if label == "NORMAL" else "Elevated reading classification.",
+            status_color(label),
+        ),
+        unsafe_allow_html=True,
     )
-    sub_text = "No alert triggered." if label == "NORMAL" else "Elevated reading classification."
-    card_class = metric_card("AI Classification", label, sub_text, accent, accent)
-    card_conf = metric_card(
-        "Model Confidence",
-        f'{latest["Model Confidence (%)"]:.2f}%',
-        "Predicted-class probability from the model",
-        COLOR_ACCENT,
+    c3.markdown(
+        stat_card("Model Confidence", f'{latest["Model Confidence (%)"]:.2f}%', "Predicted-class probability"),
+        unsafe_allow_html=True,
     )
-
-c1.markdown(card_reading, unsafe_allow_html=True)
-c2.markdown(card_class, unsafe_allow_html=True)
-c3.markdown(card_conf, unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
 # Reading analytics
 # ----------------------------------------------------------------------------
-section_header(
-    "Reading Analytics",
-    "Reading Trend",
-    "Plotted from the readings analyzed during the current session.",
-)
+section("Reading Analytics", "Readings analyzed during the current session.")
 
 
 def build_chart(df: pd.DataFrame):
@@ -522,8 +353,8 @@ def build_chart(df: pd.DataFrame):
             x=df["Sample"],
             y=df["Reading"],
             mode="lines+markers",
-            line=dict(color=COLOR_ACCENT, width=2.5, shape="linear"),
-            marker=dict(size=10, color=colors, line=dict(color="#0b1120", width=2)),
+            line=dict(color="#a1a1aa", width=2),
+            marker=dict(size=9, color=colors, line=dict(color="#09090b", width=2)),
             customdata=df[["AI Classification", "Model Confidence (%)"]].to_numpy(),
             hovertemplate=(
                 "<b>Sample %{x}</b><br>"
@@ -532,42 +363,38 @@ def build_chart(df: pd.DataFrame):
                 "Model Confidence: %{customdata[1]:.2f}%"
                 "<extra></extra>"
             ),
-            name="Reading",
         )
     )
     fig.update_layout(
-        height=380,
+        height=360,
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#0f1830",
-        font=dict(family="Inter, Segoe UI, sans-serif", color="#c5d3ea", size=13),
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color="#a1a1aa", size=12),
         showlegend=False,
-        hoverlabel=dict(bgcolor="#14213f", bordercolor="#2a3b5f", font=dict(color="#e6edf7")),
+        hoverlabel=dict(bgcolor="#18181b", bordercolor="#3f3f46", font=dict(color="#fafafa")),
         xaxis=dict(
             title="Sample Number",
-            gridcolor="rgba(142,163,196,0.12)",
+            gridcolor="#1f1f23",
             zeroline=False,
+            linecolor="#27272a",
             dtick=1 if len(df) <= 20 else None,
-            tickmode="linear" if len(df) <= 20 else "auto",
-            linecolor="#2a3b5f",
         ),
         yaxis=dict(
             title="Reading (Arbitrary Units)",
-            gridcolor="rgba(142,163,196,0.12)",
+            gridcolor="#1f1f23",
             zeroline=False,
+            linecolor="#27272a",
             range=[0, max(150, int(df["Reading"].max()) + 10)],
-            linecolor="#2a3b5f",
         ),
     )
     return fig
 
 
 with st.container(border=True):
-    st.markdown('<span class="panel-marker"></span>', unsafe_allow_html=True)
     if history_df.empty:
         st.markdown(
-            '<div class="empty-state"><strong>No readings to display</strong>'
-            "Analyze a reading to start building the trend chart.</div>",
+            '<div class="empty"><b>No readings to display</b>Analyze a reading to start the trend chart.</div>',
             unsafe_allow_html=True,
         )
     elif go is not None:
@@ -578,49 +405,88 @@ with st.container(border=True):
 # ----------------------------------------------------------------------------
 # Monitoring history + export
 # ----------------------------------------------------------------------------
-section_header(
-    "Monitoring History",
-    "Session Readings",
-    "Entries are added only when a reading is analyzed.",
+section("Monitoring History", "Entries are added only when a reading is analyzed.")
+
+if history_df.empty:
+    st.markdown(
+        '<div class="empty"><b>No history available</b>'
+        "Analyze a reading to populate the monitoring history.</div>",
+        unsafe_allow_html=True,
+    )
+else:
+    rows = []
+    last_sample = int(history_df["Sample"].iloc[-1])
+    for _, r in history_df.iloc[::-1].iterrows():
+        c = status_color(r["AI Classification"])
+        cls = "active" if int(r["Sample"]) == last_sample else ""
+        rows.append(
+            f'<tr class="{cls}"><td>{int(r["Sample"])}</td><td>{int(r["Reading"])}</td>'
+            f'<td><span class="dot" style="background:{c}"></span>{esc(r["AI Classification"])}</td>'
+            f'<td>{float(r["Model Confidence (%)"]):.2f}</td></tr>'
+        )
+    st.markdown(
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr>'
+        "<th>Sample</th><th>Reading (AU)</th><th>AI Classification</th><th>Model Confidence (%)</th>"
+        f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>',
+        unsafe_allow_html=True,
+    )
+
+st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+st.download_button(
+    "Export Report (CSV)",
+    data=history_df.to_csv(index=False),
+    file_name="radiation_monitoring_report.csv",
+    mime="text/csv",
+    disabled=history_df.empty,
+    key="export_button",
 )
 
-with st.container(border=True):
-    st.markdown('<span class="panel-marker"></span>', unsafe_allow_html=True)
-    if history_df.empty:
-        st.markdown(
-            '<div class="empty-state"><strong>No history available</strong>'
-            "Analyze a reading to populate the monitoring history.</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        stretch_call(
-            st.dataframe,
-            history_df,
-            hide_index=True,
-            column_config={
-                "Sample": st.column_config.NumberColumn("Sample", format="%d"),
-                "Reading": st.column_config.NumberColumn("Reading (AU)", format="%d"),
-                "AI Classification": st.column_config.TextColumn("AI Classification"),
-                "Model Confidence (%)": st.column_config.NumberColumn(
-                    "Model Confidence (%)", format="%.2f"
-                ),
-            },
-        )
+# ----------------------------------------------------------------------------
+# Hardware
+# ----------------------------------------------------------------------------
+section("Hardware", "Components used in the alert system.")
 
-    export_csv = history_df.to_csv(index=False)
-    st.download_button(
-        "Export Report (CSV)",
-        data=export_csv,
-        file_name="radiation_monitoring_report.csv",
-        mime="text/csv",
-        disabled=history_df.empty,
-        key="export_button",
+hardware = [
+    ("ESP32", "Microcontroller that runs the device firmware and drives the alert outputs."),
+    ("Status LEDs", "Green and red LEDs for at-a-glance NORMAL and ELEVATED indication."),
+    ("Buzzer", "Audible alert for an ELEVATED classification."),
+    ("0.96\" OLED Display", "Compact on-device display for the current reading and status."),
+]
+st.markdown(
+    '<div class="grid">'
+    + "".join(
+        f'<div class="item"><div class="n">{esc(n)}</div><div class="r">{esc(d)}</div></div>'
+        for n, d in hardware
     )
+    + "</div>",
+    unsafe_allow_html=True,
+)
+
+st.markdown("<div style='height:0.9rem'></div>", unsafe_allow_html=True)
+active = latest["AI Classification"] if latest else None
+output_rows = [
+    ("NORMAL", "Green LED on", "Off", "Shows NORMAL"),
+    ("ELEVATED", "Red LED on", "On", "Shows ELEVATED"),
+]
+body = ""
+for name, led, buzzer, oled in output_rows:
+    c = status_color(name)
+    cls = "active" if name == active else ""
+    body += (
+        f'<tr class="{cls}"><td><span class="dot" style="background:{c}"></span>{name}</td>'
+        f"<td>{led}</td><td>{buzzer}</td><td>{oled}</td></tr>"
+    )
+st.markdown(
+    '<div class="tbl-wrap"><table class="tbl"><thead><tr>'
+    "<th>Classification</th><th>LED</th><th>Buzzer</th><th>OLED Display</th>"
+    f"</tr></thead><tbody>{body}</tbody></table></div>",
+    unsafe_allow_html=True,
+)
 
 # ----------------------------------------------------------------------------
 # System information
 # ----------------------------------------------------------------------------
-section_header("System Information", "Configuration Details")
+section("System Information")
 
 info_items = [
     ("Project", PROJECT_TITLE),
@@ -629,17 +495,15 @@ info_items = [
     ("Output Classes", "NORMAL / ELEVATED"),
     ("Model File", MODEL_FILENAME),
     ("Reading Unit", "Arbitrary Units"),
-    ("Hardware Integration", "Not yet connected in the current application"),
+    ("Controller", "ESP32"),
 ]
-info_html = "".join(
-    f'<div class="info-item"><div class="info-key">{k}</div><div class="info-val">{v}</div></div>'
-    for k, v in info_items
-)
 st.markdown(
-    f'<div class="info-grid">{info_html}</div>'
-    '<div class="info-note">Current readings are generated for software testing and are not '
-    "measurements from a physical sensor. Classifications are produced by the machine-learning model "
-    "and have not been validated for real-world radiation detection. Actual radiation measurement "
-    "requires a suitable physical radiation sensor and validation.</div>",
+    '<div class="grid">'
+    + "".join(
+        f'<div class="item kv"><div class="k">{esc(k)}</div><div class="v">{esc(v)}</div></div>'
+        for k, v in info_items
+    )
+    + "</div>",
     unsafe_allow_html=True,
 )
+```
