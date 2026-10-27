@@ -1,4 +1,3 @@
-```python
 import html
 from pathlib import Path
 
@@ -506,4 +505,4 @@ st.markdown(
     + "</div>",
     unsafe_allow_html=True,
 )
-```
+
