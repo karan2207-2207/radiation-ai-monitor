@@ -225,7 +225,7 @@ def publish_to_thingspeak(reading, prediction):
             },
             timeout=10,
         )
-st.write("ThingSpeak response:", response.status_code, response.text)
+        st.write("ThingSpeak response:", response.status_code, response.text)
         if response.text.strip() == "0":
             return False, "ThingSpeak update failed."
 
