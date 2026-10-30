@@ -253,23 +253,23 @@ def analyze_reading() -> None:
         return
 
     st.session_state.analysis_error = None
+
     st.session_state.history.append(
-    {
-        "Sample": len(st.session_state.history) + 1,
-        "Reading": reading_value,
-        "AI Classification": LABELS.get(prediction, str(prediction)),
-        "Model Confidence (%)": round(confidence, 2),
-    }
-)
+        {
+            "Sample": len(st.session_state.history) + 1,
+            "Reading": reading_value,
+            "AI Classification": LABELS.get(prediction, str(prediction)),
+            "Model Confidence (%)": round(confidence, 2),
+        }
+    )
 
-sync_ok, sync_message = publish_to_thingspeak(
-    reading_value,
-    prediction
-)
+    sync_ok, sync_message = publish_to_thingspeak(
+        reading_value,
+        prediction
+    )
 
-st.session_state.hardware_sync_ok = sync_ok
-st.session_state.hardware_sync_message = sync_message
-
+    st.session_state.hardware_sync_ok = sync_ok
+    st.session_state.hardware_sync_message = sync_message
 
 def clear_history() -> None:
     st.session_state.history = []
