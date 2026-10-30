@@ -4,6 +4,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 import streamlit as st
+import requests
 
 try:
     import plotly.graph_objects as go
@@ -211,6 +212,27 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "analysis_error" not in st.session_state:
     st.session_state.analysis_error = None
+def publish_to_thingspeak(reading, prediction):
+    try:
+        write_key = st.secrets["thingspeak"]["write_api_key"]
+
+        response = requests.post(
+            "https://api.thingspeak.com/update",
+            data={
+                "api_key": write_key,
+                "field2": reading,
+                "field3": prediction,
+            },
+            timeout=10,
+        )
+
+        if response.text.strip() == "0":
+            return False, "ThingSpeak update failed."
+
+        return True, "Hardware update sent successfully."
+
+    except Exception as exc:
+        return False, str(exc)
 
 
 def analyze_reading() -> None:
@@ -232,13 +254,21 @@ def analyze_reading() -> None:
 
     st.session_state.analysis_error = None
     st.session_state.history.append(
-        {
-            "Sample": len(st.session_state.history) + 1,
-            "Reading": reading_value,
-            "AI Classification": LABELS.get(prediction, str(prediction)),
-            "Model Confidence (%)": round(confidence, 2),
-        }
-    )
+    {
+        "Sample": len(st.session_state.history) + 1,
+        "Reading": reading_value,
+        "AI Classification": LABELS.get(prediction, str(prediction)),
+        "Model Confidence (%)": round(confidence, 2),
+    }
+)
+
+sync_ok, sync_message = publish_to_thingspeak(
+    reading_value,
+    prediction
+)
+
+st.session_state.hardware_sync_ok = sync_ok
+st.session_state.hardware_sync_message = sync_message
 
 
 def clear_history() -> None:
@@ -292,6 +322,15 @@ with left_col:
             st.button("Clear History", on_click=clear_history, disabled=not history, key="clear_button")
         if st.session_state.analysis_error:
             st.error(f"Analysis could not be completed: {st.session_state.analysis_error}")
+        if st.session_state.get("hardware_sync_ok") is True:
+            st.success("Reading sent to hardware successfully.")
+
+        elif st.session_state.get("hardware_sync_ok") is False:
+            st.warning(
+                "Hardware sync failed: "
+                + st.session_state.hardware_sync_message
+            )
+        
 
 with right_col:
     with st.container(border=True):
