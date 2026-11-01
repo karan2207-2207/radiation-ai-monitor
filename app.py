@@ -1,119 +1,96 @@
-    )
-    return fig
+import html
+from pathlib import Path
 
+import joblib
+import pandas as pd
+import streamlit as st
+import requests
 
-with st.container(border=True):
-    if history_df.empty:
-        st.markdown(
-            '<div class="empty"><b>No readings to display</b>Analyze a reading to start the trend chart.</div>',
-            unsafe_allow_html=True,
-        )
-    elif go is not None:
-        stretch_call(st.plotly_chart, build_chart(history_df), config={"displaylogo": False})
-    else:
-        st.line_chart(history_df.set_index("Sample")["Reading"])
+try:
+    import plotly.graph_objects as go
+except ImportError:  # pragma: no cover
+    go = None
 
 # ----------------------------------------------------------------------------
-# Monitoring history + export
+# Configuration
 # ----------------------------------------------------------------------------
-section("Monitoring History", "Entries are added only when a reading is analyzed.")
+PROJECT_TITLE = "IoT-Based Radiation Leak Detection with AI Alert System"
+PROJECT_SUBTITLE = "Intelligent Monitoring • Machine Learning • Alert Management"
+MODEL_FILENAME = "radiation_ml_model.pkl"
+LABELS = {0: "NORMAL", 1: "ELEVATED"}
 
-if history_df.empty:
-    st.markdown(
-        '<div class="empty"><b>No history available</b>'
-        "Analyze a reading to populate the monitoring history.</div>",
-        unsafe_allow_html=True,
-    )
-else:
-    rows = []
-    last_sample = int(history_df["Sample"].iloc[-1])
-    for _, r in history_df.iloc[::-1].iterrows():
-        c = status_color(r["AI Classification"])
-        cls = "active" if int(r["Sample"]) == last_sample else ""
-        rows.append(
-            f'<tr class="{cls}"><td>{int(r["Sample"])}</td><td>{int(r["Reading"])}</td>'
-            f'<td><span class="dot" style="background:{c}"></span>{esc(r["AI Classification"])}</td>'
-            f'<td>{float(r["Model Confidence (%)"]):.2f}</td></tr>'
-        )
-    st.markdown(
-        '<div class="tbl-wrap"><table class="tbl"><thead><tr>'
-        "<th>Sample</th><th>Reading (AU)</th><th>AI Classification</th><th>Model Confidence (%)</th>"
-        f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>',
-        unsafe_allow_html=True,
-    )
+COLOR_NORMAL = "#22c55e"
+COLOR_ELEVATED = "#ef4444"
+COLOR_NEUTRAL = "#71717a"
 
-st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
-st.download_button(
-    "Export Report (CSV)",
-    data=history_df.to_csv(index=False),
-    file_name="radiation_monitoring_report.csv",
-    mime="text/csv",
-    disabled=history_df.empty,
-    key="export_button",
+st.set_page_config(
+    page_title="Radiation Monitoring Dashboard",
+    page_icon="☢️",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 # ----------------------------------------------------------------------------
-# Hardware
+# Styling
 # ----------------------------------------------------------------------------
-section("Hardware", "Components used in the alert system.")
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-hardware = [
-    ("ESP32", "Microcontroller that runs the device firmware and drives the alert outputs."),
-    ("Status LEDs", "Green and red LEDs for at-a-glance NORMAL and ELEVATED indication."),
-    ("0.96\" OLED Display", "Compact on-device display for the current reading and status."),
-]
-st.markdown(
-    '<div class="grid">'
-    + "".join(
-        f'<div class="item"><div class="n">{esc(n)}</div><div class="r">{esc(d)}</div></div>'
-        for n, d in hardware
-    )
-    + "</div>",
-    unsafe_allow_html=True,
-)
+html, body, .stApp {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.stApp { background: #09090b; color: #fafafa; }
+header[data-testid="stHeader"] { background: transparent; }
+#MainMenu, footer { visibility: hidden; }
+.block-container { padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1200px; }
 
-st.markdown("<div style='height:0.9rem'></div>", unsafe_allow_html=True)
-active = latest["AI Classification"] if latest else None
-output_rows = [
-    ("NORMAL", "Green LED on", "Shows NORMAL"),
-    ("ELEVATED", "Red LED on", "Shows ELEVATED"),
-]
-body = ""
-for name, led, oled in output_rows:
-    c = status_color(name)
-    cls = "active" if name == active else ""
-    body += (
-        f'<tr class="{cls}"><td><span class="dot" style="background:{c}"></span>{name}</td>'
-        f"<td>{led}</td><td>{oled}</td></tr>"
-    )
-st.markdown(
-    '<div class="tbl-wrap"><table class="tbl"><thead><tr>'
-    "<th>Classification</th><th>LED</th><th>OLED Display</th>"
-    f"</tr></thead><tbody>{body}</tbody></table></div>",
-    unsafe_allow_html=True,
-)
+/* Top bar */
+.topbar {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.5rem;
+    padding-bottom: 1.2rem; margin-bottom: 0.5rem;
+    border-bottom: 1px solid #27272a;
+}
+.topbar h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; margin: 0; padding: 0; color: #fafafa; }
+.topbar p { font-size: 0.9rem; color: #a1a1aa; margin: 0.3rem 0 0 0; }
+.topbar .meta { font-size: 0.8rem; color: #71717a; }
 
-# ----------------------------------------------------------------------------
-# System information
-# ----------------------------------------------------------------------------
-section("System Information")
+/* Section headings */
+.sec { margin: 2.2rem 0 0.9rem 0; }
+.sec h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; padding: 0; color: #fafafa; }
+.sec p { font-size: 0.85rem; color: #a1a1aa; margin: 0.2rem 0 0 0; }
 
-info_items = [
-    ("Project", PROJECT_TITLE),
-    ("Classification Engine", "Random Forest Classifier"),
-    ("Input Feature", "Reading"),
-    ("Output Classes", "NORMAL / ELEVATED"),
-    ("Model File", MODEL_FILENAME),
-    ("Reading Unit", "Arbitrary Units"),
-    ("Controller", "ESP32"),
-]
-st.markdown(
-    '<div class="grid">'
-    + "".join(
-        f'<div class="item kv"><div class="k">{esc(k)}</div><div class="v">{esc(v)}</div></div>'
-        for k, v in info_items
-    )
-    + "</div>",
-    unsafe_allow_html=True,
-)
+/* Containers */
+div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 10px; }
 
+.card-title { font-size: 0.95rem; font-weight: 600; color: #fafafa; margin: 0; }
+.card-desc { font-size: 0.82rem; color: #a1a1aa; margin: 0.15rem 0 0.6rem 0; }
+
+/* Stat cards */
+.stat {
+    border: 1px solid #27272a; border-radius: 10px; background: #0c0c0f;
+    padding: 1.1rem 1.2rem; height: 100%;
+}
+.stat .k { font-size: 0.8rem; color: #a1a1aa; }
+.stat .v { font-size: 1.9rem; font-weight: 600; letter-spacing: -0.02em; margin-top: 0.35rem; line-height: 1.2; }
+.stat .s { font-size: 0.8rem; color: #71717a; margin-top: 0.25rem; }
+
+/* Status block */
+.status {
+    border: 1px solid #27272a; border-radius: 10px; padding: 1rem 1.1rem;
+    background: #0c0c0f;
+}
+.badge {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em;
+    padding: 0.2rem 0.65rem; border-radius: 6px;
+    border: 1px solid var(--c); color: var(--c);
+}
+.badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); display: inline-block; }
+.status .msg { font-size: 1rem; font-weight: 500; margin-top: 0.8rem; color: #fafafa; }
+.status .sub { font-size: 0.82rem; color: #a1a1aa; margin-top: 0.2rem; }
+
+/* Slider thumb */
+div[data-testid="stSlider"] [role="slider"] { background-color: #fafafa; border-color: #fafafa; }
+div[data-testid="stSlider"] label p { color: #e4e4e7; font-weight: 500; }
