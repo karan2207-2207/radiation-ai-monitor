@@ -305,7 +305,7 @@ st.markdown(
     f"<h1>{esc(PROJECT_TITLE)}</h1>"
     f"<p>{esc(PROJECT_SUBTITLE)}</p>"
     "</div>"
-    '<div class="meta">ESP32 • LED • Buzzer • OLED Display</div></div>',
+    '<div class="meta">ESP32 • LED • OLED Display</div></div>',
     unsafe_allow_html=True,
 )
 
